@@ -1,4 +1,4 @@
-use std::{env, thread};
+use std::{thread};
 use std::error::Error;
 
 use sysinfo::{DiskExt, ProcessorExt, System, SystemExt};
@@ -6,54 +6,28 @@ use sysinfo::{DiskExt, ProcessorExt, System, SystemExt};
 use crate::lib::report::{CPUReport, DiskReport, MemoryReport, SystemReport};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
-use crate::lib::common::RuntimeError;
+use crate::lib::common::{RuntimeError, RuntimeMode, MINUTES_MULTIPLIER};
 use std::time::Duration;
-
-enum RuntimeMode {
-    CONTINUOUS,
-    SINGLE,
-}
-
-struct RunnerConfig {
-    runtime_mode: RuntimeMode,
-    check_interval: u64,
-}
-
-const CHECK_INTERVAL_KEY: &str = "check_interval";
-const MINUTES_MULTIPLIER: u64 = 60;
-const DEFAULT_WAIT_INTERVAL: u64 = 1;
-
-fn load_config() -> Result<RunnerConfig, Box<dyn Error>> {
-    let runner_config = RunnerConfig {
-        runtime_mode: RuntimeMode::SINGLE,
-        check_interval: DEFAULT_WAIT_INTERVAL,
-    };
-    let args: Vec<String> = env::args().collect();
-    if args.len() < 2 {
-        return Ok(runner_config);
-    }
-
-    Ok(runner_config)
-}
+use crate::lib::config::load_config;
 
 pub fn run() -> Result<(), Box<dyn Error>> {
     let runner_config = load_config()?;
     let mut sys = System::new_all();
     match runner_config.runtime_mode {
-        RuntimeMode::SINGLE => execute_check(&mut sys),
-        RuntimeMode::CONTINUOUS => {
+        RuntimeMode::Single => execute_check(&mut sys),
+        RuntimeMode::Continuous => {
             let running = Arc::new(AtomicBool::new(true));
             let r = running.clone();
             let run_thread = thread::spawn(move || {
                 while running.load(Ordering::SeqCst) {
                     match execute_check(&mut sys) {
-                        Ok(()) => {},
+                        Ok(()) => {}
                         Err(e) => {
                             println!("An error occurred during check runtime loop: {}", e);
                             break;
                         }
                     }
-                    thread::park_timeout(Duration::from_secs(runner_config.check_interval * DEFAULT_WAIT_INTERVAL));
+                    thread::park_timeout(Duration::from_secs(runner_config.check_interval * MINUTES_MULTIPLIER));
                 }
             });
             let run_thread_shutdown = run_thread.thread().clone();
@@ -67,7 +41,7 @@ pub fn run() -> Result<(), Box<dyn Error>> {
                     return Err(error);
                 }
             };
-            run_thread.join();
+            run_thread.join().unwrap();
             Ok(())
         }
     }

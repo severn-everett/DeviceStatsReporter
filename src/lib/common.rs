@@ -2,6 +2,13 @@ use std::fmt;
 use std::fmt::Formatter;
 use std::error::Error;
 
+pub enum RuntimeMode {
+    Continuous,
+    Single,
+}
+
+pub const MINUTES_MULTIPLIER: u64 = 60;
+
 #[derive(Debug)]
 pub struct IllegalArgumentError {
     details: String,
