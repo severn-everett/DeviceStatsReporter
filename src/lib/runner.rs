@@ -1,17 +1,19 @@
-use std::{thread};
+use std::env::args;
 use std::error::Error;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::thread;
+use std::time::Duration;
 
 use sysinfo::{DiskExt, ProcessorExt, System, SystemExt};
 
-use crate::lib::report::{CPUReport, DiskReport, MemoryReport, SystemReport};
-use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
-use crate::lib::common::{RuntimeError, RuntimeMode, MINUTES_MULTIPLIER};
-use std::time::Duration;
+use crate::lib::common::{MINUTES_MULTIPLIER, RuntimeError, RuntimeMode};
 use crate::lib::config::load_config;
+use crate::lib::report::{CPUReport, DiskReport, MemoryReport, SystemReport};
 
 pub fn run() -> Result<(), Box<dyn Error>> {
-    let runner_config = load_config()?;
+    let args: Vec<String> = args().collect();
+    let runner_config = load_config(args.get(1))?;
     let mut sys = System::new_all();
     match runner_config.runtime_mode {
         RuntimeMode::Single => execute_check(&mut sys),

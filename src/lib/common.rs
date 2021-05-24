@@ -2,6 +2,7 @@ use std::fmt;
 use std::fmt::Formatter;
 use std::error::Error;
 
+#[derive(Debug,PartialEq)]
 pub enum RuntimeMode {
     Continuous,
     Single,
