@@ -1,0 +1,5 @@
+device_name: "Test Device Name"
+server_address: "tcp://test.server.address:1883"
+topic: "Test Topic"
+runtime_mode: "Continuous"
+check_interval: 5
