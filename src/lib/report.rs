@@ -1,18 +1,20 @@
-#[derive(Debug)]
+use serde::Serialize as SerdeSerialize;
+
+#[derive(Debug,SerdeSerialize)]
 pub struct SystemReport {
     pub disks: Box<[DiskReport]>,
     pub cpus: Box<[CPUReport]>,
     pub memory: MemoryReport,
 }
 
-#[derive(Debug)]
+#[derive(Debug,SerdeSerialize)]
 pub struct DiskReport {
     pub name: String,
     pub disk_used: u64,
     pub disk_capacity: u64,
 }
 
-#[derive(Debug)]
+#[derive(Debug,SerdeSerialize)]
 pub struct CPUReport {
     pub name: String,
     pub brand: String,
@@ -21,7 +23,7 @@ pub struct CPUReport {
     pub usage: f32,
 }
 
-#[derive(Debug)]
+#[derive(Debug,SerdeSerialize)]
 pub struct MemoryReport {
     pub memory_used: u64,
     pub memory_capacity: u64,

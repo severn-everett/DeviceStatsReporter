@@ -10,6 +10,7 @@ use sysinfo::{DiskExt, ProcessorExt, System, SystemExt};
 use crate::lib::common::{MINUTES_MULTIPLIER, RuntimeError, RuntimeMode};
 use crate::lib::config::load_config;
 use crate::lib::report::{CPUReport, DiskReport, MemoryReport, SystemReport};
+use lz4_flex::compress_prepend_size;
 
 pub fn run() -> Result<(), Box<dyn Error>> {
     let args: Vec<String> = args().collect();
@@ -39,12 +40,12 @@ pub fn run() -> Result<(), Box<dyn Error>> {
     match runner_config.runtime_mode {
         RuntimeMode::Single => {
             match execute_check(&mut sys) {
-                Ok(()) => {},
+                Ok(()) => {}
                 Err(e) => {
                     eprintln!("An error occurred during check: {}", e);
                 }
             };
-        },
+        }
         RuntimeMode::Continuous => {
             let running = Arc::new(AtomicBool::new(true));
             let r = running.clone();
@@ -119,6 +120,18 @@ fn execute_check(sys: &mut System) -> Result<(), Box<dyn Error>> {
         cpus: cpu_reports.into_boxed_slice(),
         memory: memory_report,
     };
-    println!("System Report: {:?}", sys_report);
+
+    let report_json = match serde_json::to_string(&sys_report) {
+        Ok(report_json) => report_json,
+        Err(e) => {
+            let error = Box::new(RuntimeError::new(e.to_string().as_str()));
+            return Err(error);
+        }
+    };
+    let compressed_report = compress_prepend_size(report_json.as_bytes());
+    // let compressed_report_str = String::from_utf8_lossy(&compressed_report);
+    println!("System Report: {:?}", report_json);
+    println!("Compressed Report: {:?}", compressed_report);
+    println!("Compression: {}/{}", compressed_report.len(), report_json.len());
     Ok(())
 }
