@@ -7,6 +7,8 @@ use config::ConfigError;
 pub struct RunnerConfig {
     pub device_name: String,
     pub server_address: String,
+    pub user_name: String,
+    pub user_password: String,
     pub topic: String,
     pub runtime_mode: RuntimeMode,
     pub check_interval: u64,
@@ -14,12 +16,16 @@ pub struct RunnerConfig {
 
 // Configuration key names
 const DEVICE_NAME_KEY: &str = "device_name";
+const SERVER_ADDRESS_KEY: &str = "server_address";
+const USER_NAME_KEY: &str = "user_name";
+const USER_PASSWORD_KEY: &str = "user_password";
 const RUNTIME_MODE_KEY: &str = "runtime_mode";
 const CHECK_INTERVAL_KEY: &str = "check_interval";
-const SERVER_ADDRESS_KEY: &str = "server_address";
 const TOPIC_KEY: &str = "topic";
 // Configuration values
 const DEFAULT_SERVER_ADDRESS: &str = "tcp://localhost:1883";
+const DEFAULT_USER_NAME: &str = "DeviceStatsUploader";
+const DEFAULT_USER_PASSWORD: &str = "DeviceStatsUploaderPassword";
 const DEFAULT_TOPIC: &str = "Device_Status";
 const SINGLE_RUNTIME_MODE: &str = "Single";
 const CONTINUOUS_RUNTIME_MODE: &str = "Continuous";
@@ -31,6 +37,8 @@ pub fn load_config(config_path: Option<&String>) -> Result<RunnerConfig, Box<dyn
     let mut runner_config = RunnerConfig {
         device_name: Uuid::new_v4().to_string(),
         server_address: String::from(DEFAULT_SERVER_ADDRESS),
+        user_name: String::from(DEFAULT_USER_NAME),
+        user_password: String::from(DEFAULT_USER_PASSWORD),
         topic: String::from(DEFAULT_TOPIC),
         runtime_mode: RuntimeMode::Single,
         check_interval: DEFAULT_CHECK_INTERVAL,
@@ -57,6 +65,16 @@ pub fn load_config(config_path: Option<&String>) -> Result<RunnerConfig, Box<dyn
         Ok(server_address) => runner_config.server_address = server_address,
         Err(_) => {}
     };
+    // User name
+    match settings.get_str(USER_NAME_KEY) {
+        Ok(user_name) => runner_config.user_name = user_name,
+        Err(_) => {}
+    };
+    // User password
+    match settings.get_str(USER_PASSWORD_KEY) {
+        Ok(user_password) => runner_config.user_password = user_password,
+        Err(_) => {}
+    };
     // Topic
     match settings.get_str(TOPIC_KEY) {
         Ok(topic) => runner_config.topic = topic,
@@ -72,12 +90,15 @@ pub fn load_config(config_path: Option<&String>) -> Result<RunnerConfig, Box<dyn
                     match settings.get(CHECK_INTERVAL_KEY) {
                         Ok(check_interval) => {
                             if check_interval >= MINIMUM_CHECK_INTERVAL && check_interval <= MAXIMUM_CHECK_INTERVAL {
-                                println!("TEST INTERVAL: {}", check_interval);
                                 runner_config.check_interval = check_interval;
                             } else {
                                 let error = Box::new(
                                     IllegalArgumentError::new(
-                                        format!("Check interval must be between {} and {}", MINIMUM_CHECK_INTERVAL, MAXIMUM_CHECK_INTERVAL).as_str()
+                                        format!(
+                                            "Check interval must be between {} and {}",
+                                            MINIMUM_CHECK_INTERVAL,
+                                            MAXIMUM_CHECK_INTERVAL
+                                        ).as_str()
                                     )
                                 );
                                 return Err(error);
@@ -85,7 +106,7 @@ pub fn load_config(config_path: Option<&String>) -> Result<RunnerConfig, Box<dyn
                         }
                         Err(e) => {
                             match e {
-                                ConfigError::NotFound(_) => {},
+                                ConfigError::NotFound(_) => {}
                                 _ => {
                                     let error = Box::new(
                                         IllegalArgumentError::new(e.to_string().as_str())
@@ -117,13 +138,15 @@ mod tests {
     use pretty_assertions::assert_ne;
 
     use crate::lib::common::{IllegalArgumentError, RuntimeMode};
-    use crate::lib::config::{DEFAULT_CHECK_INTERVAL, load_config, DEFAULT_SERVER_ADDRESS, DEFAULT_TOPIC};
+    use crate::lib::config::{DEFAULT_CHECK_INTERVAL, load_config, DEFAULT_SERVER_ADDRESS, DEFAULT_TOPIC, DEFAULT_USER_NAME, DEFAULT_USER_PASSWORD};
 
     #[test]
     fn load_default_config() {
         let result = load_config(None).unwrap();
         assert_ne!("", result.device_name);
         assert_eq!(DEFAULT_SERVER_ADDRESS, result.server_address);
+        assert_eq!(DEFAULT_USER_NAME, result.user_name);
+        assert_eq!(DEFAULT_USER_PASSWORD, result.user_password);
         assert_eq!(DEFAULT_TOPIC, result.topic);
         assert_eq!(RuntimeMode::Single, result.runtime_mode);
         assert_eq!(DEFAULT_CHECK_INTERVAL, result.check_interval);
@@ -136,6 +159,8 @@ mod tests {
         ).unwrap();
         assert_ne!("", result.device_name);
         assert_eq!(DEFAULT_SERVER_ADDRESS, result.server_address);
+        assert_eq!(DEFAULT_USER_NAME, result.user_name);
+        assert_eq!(DEFAULT_USER_PASSWORD, result.user_password);
         assert_eq!(DEFAULT_TOPIC, result.topic);
         assert_eq!(RuntimeMode::Single, result.runtime_mode);
     }
@@ -147,6 +172,8 @@ mod tests {
         ).unwrap();
         assert_ne!("", result.device_name);
         assert_eq!(DEFAULT_SERVER_ADDRESS, result.server_address);
+        assert_eq!(DEFAULT_USER_NAME, result.user_name);
+        assert_eq!(DEFAULT_USER_PASSWORD, result.user_password);
         assert_eq!(DEFAULT_TOPIC, result.topic);
         assert_eq!(RuntimeMode::Continuous, result.runtime_mode);
         assert_eq!(DEFAULT_CHECK_INTERVAL, result.check_interval);
@@ -159,6 +186,8 @@ mod tests {
         ).unwrap();
         assert_eq!("Test Device Name", result.device_name);
         assert_eq!("tcp://test.server.address:1883", result.server_address);
+        assert_eq!("TestUser", result.user_name);
+        assert_eq!("TestPassword", result.user_password);
         assert_eq!("Test Topic", result.topic);
         assert_eq!(RuntimeMode::Single, result.runtime_mode);
         assert_eq!(DEFAULT_CHECK_INTERVAL, result.check_interval);
@@ -171,6 +200,8 @@ mod tests {
         ).unwrap();
         assert_eq!("Test Device Name", result.device_name);
         assert_eq!("tcp://test.server.address:1883", result.server_address);
+        assert_eq!("TestUser", result.user_name);
+        assert_eq!("TestPassword", result.user_password);
         assert_eq!("Test Topic", result.topic);
         assert_eq!(RuntimeMode::Continuous, result.runtime_mode);
         assert_eq!(5, result.check_interval);

@@ -13,10 +13,38 @@ use crate::lib::report::{CPUReport, DiskReport, MemoryReport, SystemReport};
 
 pub fn run() -> Result<(), Box<dyn Error>> {
     let args: Vec<String> = args().collect();
-    let runner_config = load_config(args.get(1))?;
+    let runner_config = Arc::new(load_config(args.get(1))?);
+    let mqtt_opts = paho_mqtt::CreateOptionsBuilder::new()
+        .server_uri(runner_config.server_address.as_str())
+        .client_id(runner_config.device_name.as_str())
+        .finalize();
+    let mqtt_client = match paho_mqtt::Client::new(mqtt_opts) {
+        Ok(mqtt_client) => mqtt_client,
+        Err(e) => {
+            let error = Box::new(RuntimeError::new(e.to_string().as_str()));
+            return Err(error);
+        }
+    };
+    let conn_opts = paho_mqtt::ConnectOptionsBuilder::new()
+        .user_name(runner_config.user_name.as_str())
+        .password(runner_config.user_password.as_str())
+        .keep_alive_interval(Duration::from_secs(20))
+        .clean_session(true)
+        .finalize();
+    if let Err(e) = mqtt_client.connect(conn_opts) {
+        let error = Box::new(RuntimeError::new(e.to_string().as_str()));
+        return Err(error);
+    }
     let mut sys = System::new_all();
     match runner_config.runtime_mode {
-        RuntimeMode::Single => execute_check(&mut sys),
+        RuntimeMode::Single => {
+            match execute_check(&mut sys) {
+                Ok(()) => {},
+                Err(e) => {
+                    eprintln!("An error occurred during check: {}", e);
+                }
+            };
+        },
         RuntimeMode::Continuous => {
             let running = Arc::new(AtomicBool::new(true));
             let r = running.clone();
@@ -25,7 +53,7 @@ pub fn run() -> Result<(), Box<dyn Error>> {
                     match execute_check(&mut sys) {
                         Ok(()) => {}
                         Err(e) => {
-                            println!("An error occurred during check runtime loop: {}", e);
+                            eprintln!("An error occurred during check runtime loop: {}", e);
                             break;
                         }
                     }
@@ -44,7 +72,13 @@ pub fn run() -> Result<(), Box<dyn Error>> {
                 }
             };
             run_thread.join().unwrap();
-            Ok(())
+        }
+    }
+    match mqtt_client.disconnect(None) {
+        Ok(_) => Ok(()),
+        Err(e) => {
+            let error = Box::new(RuntimeError::new(e.to_string().as_str()));
+            Err(error)
         }
     }
 }
