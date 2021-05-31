@@ -5,12 +5,12 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
 use std::time::Duration;
 
+use lz4_flex::compress_into;
 use sysinfo::{DiskExt, ProcessorExt, System, SystemExt};
 
 use crate::lib::common::{MINUTES_MULTIPLIER, RuntimeError, RuntimeMode};
 use crate::lib::config::load_config;
 use crate::lib::report::{CPUReport, DiskReport, MemoryReport, SystemReport};
-use lz4_flex::compress_prepend_size;
 
 pub fn run() -> Result<(), Box<dyn Error>> {
     let args: Vec<String> = args().collect();
@@ -128,10 +128,25 @@ fn execute_check(sys: &mut System) -> Result<(), Box<dyn Error>> {
             return Err(error);
         }
     };
-    let compressed_report = compress_prepend_size(report_json.as_bytes());
-    // let compressed_report_str = String::from_utf8_lossy(&compressed_report);
+    let compressed_report = compress(report_json.as_str())?;
     println!("System Report: {:?}", report_json);
     println!("Compressed Report: {:?}", compressed_report);
     println!("Compression: {}/{}", compressed_report.len(), report_json.len());
     Ok(())
+}
+
+fn compress(source: &str) -> Result<Vec<u8>, Box<dyn Error>> {
+    let mut output: Vec<u8> = Vec::with_capacity(source.len() * 4);
+    for _ in 0..output.capacity() {
+        output.push(0);
+    }
+    match compress_into(source.as_bytes(), &mut output, 0) {
+        Ok(amt_written) => {
+            Ok(output.drain(..amt_written).collect())
+        }
+        Err(e) => {
+            let error = Box::new(RuntimeError::new(e.to_string().as_str()));
+            Err(error)
+        }
+    }
 }
