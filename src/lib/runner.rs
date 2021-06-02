@@ -1,3 +1,4 @@
+use std::borrow::Borrow;
 use std::env::args;
 use std::error::Error;
 use std::sync::Arc;
@@ -6,6 +7,7 @@ use std::thread;
 use std::time::Duration;
 
 use lz4_flex::compress_into;
+use paho_mqtt::{Client, ConnectOptions};
 use sysinfo::{DiskExt, ProcessorExt, System, SystemExt};
 
 use crate::lib::common::{MINUTES_MULTIPLIER, RuntimeError, RuntimeMode};
@@ -20,7 +22,7 @@ pub fn run() -> Result<(), Box<dyn Error>> {
         .client_id(runner_config.device_name.as_str())
         .finalize();
     let mqtt_client = match paho_mqtt::Client::new(mqtt_opts) {
-        Ok(mqtt_client) => mqtt_client,
+        Ok(mqtt_client) => Arc::new(mqtt_client),
         Err(e) => {
             let error = Box::new(RuntimeError::new(e.to_string().as_str()));
             return Err(error);
@@ -32,15 +34,11 @@ pub fn run() -> Result<(), Box<dyn Error>> {
         .keep_alive_interval(Duration::from_secs(20))
         .clean_session(true)
         .finalize();
-    if let Err(e) = mqtt_client.connect(conn_opts) {
-        let error = Box::new(RuntimeError::new(e.to_string().as_str()));
-        return Err(error);
-    }
     let mut sys = System::new_all();
     match runner_config.runtime_mode {
         RuntimeMode::Single => {
-            match execute_check(&mut sys) {
-                Ok(()) => {}
+            match execute_check(&mut sys, runner_config.topic.as_str(), mqtt_client.clone(), conn_opts.clone()) {
+                Ok(_) => {}
                 Err(e) => {
                     eprintln!("An error occurred during check: {}", e);
                 }
@@ -51,11 +49,10 @@ pub fn run() -> Result<(), Box<dyn Error>> {
             let r = running.clone();
             let run_thread = thread::spawn(move || {
                 while running.load(Ordering::SeqCst) {
-                    match execute_check(&mut sys) {
-                        Ok(()) => {}
+                    match execute_check(&mut sys, runner_config.topic.as_str(), mqtt_client.clone(), conn_opts.clone()) {
+                        Ok(_) => {}
                         Err(e) => {
                             eprintln!("An error occurred during check runtime loop: {}", e);
-                            break;
                         }
                     }
                     thread::park_timeout(Duration::from_secs(runner_config.check_interval * MINUTES_MULTIPLIER));
@@ -75,16 +72,26 @@ pub fn run() -> Result<(), Box<dyn Error>> {
             run_thread.join().unwrap();
         }
     }
-    match mqtt_client.disconnect(None) {
-        Ok(_) => Ok(()),
-        Err(e) => {
-            let error = Box::new(RuntimeError::new(e.to_string().as_str()));
-            Err(error)
-        }
-    }
+    Ok(())
 }
 
-fn execute_check(sys: &mut System) -> Result<(), Box<dyn Error>> {
+fn execute_check(sys: &mut System, topic_name: &str, mqtt_client: Arc<Client>, conn_opts: ConnectOptions) -> Result<(), Box<dyn Error>> {
+    let sys_report = generate_report(sys)?;
+    let report_json = match serde_json::to_string(&sys_report) {
+        Ok(report_json) => report_json,
+        Err(e) => {
+            let error = Box::new(RuntimeError::new(e.to_string().as_str()));
+            return Err(error);
+        }
+    };
+    let compressed_report = compress(report_json.as_str())?;
+    println!("System Report: {:?}", report_json);
+    println!("Compressed Report: {:?}", compressed_report);
+    println!("Compression: {}/{}", compressed_report.len(), report_json.len());
+    transmit_report(compressed_report.borrow(), topic_name, mqtt_client, conn_opts)
+}
+
+fn generate_report(sys: &mut System) -> Result<SystemReport, Box<dyn Error>> {
     sys.refresh_all();
     // Collect disk data
     let disk_reports: Vec<DiskReport> = sys.get_disks().iter().filter_map(|d| {
@@ -115,35 +122,42 @@ fn execute_check(sys: &mut System) -> Result<(), Box<dyn Error>> {
         }
     }).collect();
 
-    let sys_report = SystemReport {
+    Ok(SystemReport {
         disks: disk_reports.into_boxed_slice(),
         cpus: cpu_reports.into_boxed_slice(),
         memory: memory_report,
-    };
-
-    let report_json = match serde_json::to_string(&sys_report) {
-        Ok(report_json) => report_json,
-        Err(e) => {
-            let error = Box::new(RuntimeError::new(e.to_string().as_str()));
-            return Err(error);
-        }
-    };
-    let compressed_report = compress(report_json.as_str())?;
-    println!("System Report: {:?}", report_json);
-    println!("Compressed Report: {:?}", compressed_report);
-    println!("Compression: {}/{}", compressed_report.len(), report_json.len());
-    Ok(())
+    })
 }
 
-fn compress(source: &str) -> Result<Vec<u8>, Box<dyn Error>> {
+fn compress(source: &str) -> Result<Box<[u8]>, Box<dyn Error>> {
     let mut output: Vec<u8> = Vec::with_capacity(source.len() * 4);
     for _ in 0..output.capacity() {
         output.push(0);
     }
     match compress_into(source.as_bytes(), &mut output, 0) {
         Ok(amt_written) => {
-            Ok(output.drain(..amt_written).collect())
+            let compressed_report: Vec<u8> = output.drain(..amt_written).collect();
+            Ok(compressed_report.into_boxed_slice())
         }
+        Err(e) => {
+            let error = Box::new(RuntimeError::new(e.to_string().as_str()));
+            Err(error)
+        }
+    }
+}
+
+fn transmit_report(payload: &[u8], topic_name: &str, mqtt_client: Arc<Client>, conn_opts: ConnectOptions) -> Result<(), Box<dyn Error>> {
+    if let Err(e) = mqtt_client.connect(conn_opts) {
+        let error = Box::new(RuntimeError::new(e.to_string().as_str()));
+        return Err(error);
+    }
+    let msg = paho_mqtt::Message::new(topic_name, payload, 0);
+    if let Err(e) = mqtt_client.publish(msg) {
+        let error = Box::new(RuntimeError::new(e.to_string().as_str()));
+        return Err(error);
+    }
+    match mqtt_client.disconnect(None) {
+        Ok(_) => Ok(()),
         Err(e) => {
             let error = Box::new(RuntimeError::new(e.to_string().as_str()));
             Err(error)
