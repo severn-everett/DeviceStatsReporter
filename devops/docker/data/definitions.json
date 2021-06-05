@@ -12,6 +12,13 @@
       "limits": {}
     },
     {
+      "name": "DeviceStatsReader",
+      "password_hash": "F/0uVjigNsBoSWK26U9RkwusVHOYuyhSwy+vghSTHIb8pLAN",
+      "hashing_algorithm": "rabbit_password_hashing_sha256",
+      "tags": "",
+      "limits": {}
+    },
+    {
       "name": "DeviceStatsUploader",
       "password_hash": "cE3zmMrMWatXmmYMsDkSjXv4zaTkmzL7I4IMSyowLyLzBiS2",
       "hashing_algorithm": "rabbit_password_hashing_sha256",
@@ -27,6 +34,13 @@
   "permissions": [
     {
       "user": "StatCollectorAdmin",
+      "vhost": "/",
+      "configure": ".*",
+      "write": ".*",
+      "read": ".*"
+    },
+    {
+      "user": "DeviceStatsReader",
       "vhost": "/",
       "configure": ".*",
       "write": ".*",
