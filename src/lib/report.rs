@@ -1,6 +1,7 @@
 use serde::Serialize as SerdeSerialize;
 
 #[derive(Debug,SerdeSerialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SystemReport {
     pub disks: Box<[DiskReport]>,
     pub cpus: Box<[CPUReport]>,
@@ -8,6 +9,7 @@ pub struct SystemReport {
 }
 
 #[derive(Debug,SerdeSerialize)]
+#[serde(rename_all = "camelCase")]
 pub struct DiskReport {
     pub name: String,
     pub disk_used: u64,
@@ -15,6 +17,7 @@ pub struct DiskReport {
 }
 
 #[derive(Debug,SerdeSerialize)]
+#[serde(rename_all = "camelCase")]
 pub struct CPUReport {
     pub name: String,
     pub brand: String,
@@ -24,6 +27,7 @@ pub struct CPUReport {
 }
 
 #[derive(Debug,SerdeSerialize)]
+#[serde(rename_all = "camelCase")]
 pub struct MemoryReport {
     pub memory_used: u64,
     pub memory_capacity: u64,

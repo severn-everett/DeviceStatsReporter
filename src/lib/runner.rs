@@ -1,4 +1,3 @@
-use std::borrow::Borrow;
 use std::env::args;
 use std::error::Error;
 use std::sync::Arc;
@@ -6,7 +5,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
 use std::time::Duration;
 
-use lz4_flex::compress_into;
+use lz4_flex::compress_prepend_size;
 use paho_mqtt::{Client, ConnectOptions};
 use sysinfo::{DiskExt, ProcessorExt, System, SystemExt};
 
@@ -84,11 +83,11 @@ fn execute_check(sys: &mut System, topic_name: &str, mqtt_client: Arc<Client>, c
             return Err(error);
         }
     };
-    let compressed_report = compress(report_json.as_str())?;
+    let compressed_report = compress_prepend_size(report_json.as_bytes());
     println!("System Report: {:?}", report_json);
     println!("Compressed Report: {:?}", compressed_report);
     println!("Compression: {}/{}", compressed_report.len(), report_json.len());
-    transmit_report(compressed_report.borrow(), topic_name, mqtt_client, conn_opts)
+    transmit_report(&compressed_report, topic_name, mqtt_client, conn_opts)
 }
 
 fn generate_report(sys: &mut System) -> Result<SystemReport, Box<dyn Error>> {
@@ -127,23 +126,6 @@ fn generate_report(sys: &mut System) -> Result<SystemReport, Box<dyn Error>> {
         cpus: cpu_reports.into_boxed_slice(),
         memory: memory_report,
     })
-}
-
-fn compress(source: &str) -> Result<Box<[u8]>, Box<dyn Error>> {
-    let mut output: Vec<u8> = Vec::with_capacity(source.len() * 4);
-    for _ in 0..output.capacity() {
-        output.push(0);
-    }
-    match compress_into(source.as_bytes(), &mut output, 0) {
-        Ok(amt_written) => {
-            let compressed_report: Vec<u8> = output.drain(..amt_written).collect();
-            Ok(compressed_report.into_boxed_slice())
-        }
-        Err(e) => {
-            let error = Box::new(RuntimeError::new(e.to_string().as_str()));
-            Err(error)
-        }
-    }
 }
 
 fn transmit_report(payload: &[u8], topic_name: &str, mqtt_client: Arc<Client>, conn_opts: ConnectOptions) -> Result<(), Box<dyn Error>> {
