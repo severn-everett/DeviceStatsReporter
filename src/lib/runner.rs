@@ -95,7 +95,7 @@ fn generate_report(sys: &mut System) -> Result<SystemReport, Box<dyn Error>> {
     // Collect disk data
     let disk_reports: Vec<DiskReport> = sys.get_disks().iter().filter_map(|d| {
         let disk_name = match d.get_name().to_str() {
-            Some(name) => name,
+            Some(name) => name.trim(),
             None => return None
         };
         let disk_capacity = d.get_total_space();
@@ -113,9 +113,9 @@ fn generate_report(sys: &mut System) -> Result<SystemReport, Box<dyn Error>> {
     };
     let cpu_reports: Vec<CPUReport> = sys.get_processors().iter().map(|x| {
         CPUReport {
-            name: String::from(x.get_name()),
-            brand: String::from(x.get_brand()),
-            vendor_id: String::from(x.get_vendor_id()),
+            name: String::from(x.get_name().trim()),
+            brand: String::from(x.get_brand().trim()),
+            vendor_id: String::from(x.get_vendor_id().trim()),
             frequency: x.get_frequency(),
             usage: x.get_cpu_usage(),
         }
