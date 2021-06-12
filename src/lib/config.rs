@@ -5,7 +5,7 @@ use crate::lib::common::{IllegalArgumentError, RuntimeError, RuntimeMode};
 use config::ConfigError;
 
 pub struct RunnerConfig {
-    pub device_name: String,
+    pub device_id: String,
     pub server_address: String,
     pub user_name: String,
     pub user_password: String,
@@ -15,7 +15,7 @@ pub struct RunnerConfig {
 }
 
 // Configuration key names
-const DEVICE_NAME_KEY: &str = "device_name";
+const DEVICE_ID_KEY: &str = "device_id";
 const SERVER_ADDRESS_KEY: &str = "server_address";
 const USER_NAME_KEY: &str = "user_name";
 const USER_PASSWORD_KEY: &str = "user_password";
@@ -35,7 +35,7 @@ const MAXIMUM_CHECK_INTERVAL: u64 = 240;
 
 pub fn load_config(config_path: Option<&String>) -> Result<RunnerConfig, Box<dyn Error>> {
     let mut runner_config = RunnerConfig {
-        device_name: Uuid::new_v4().to_string(),
+        device_id: Uuid::new_v4().to_string(),
         server_address: String::from(DEFAULT_SERVER_ADDRESS),
         user_name: String::from(DEFAULT_USER_NAME),
         user_password: String::from(DEFAULT_USER_PASSWORD),
@@ -56,8 +56,8 @@ pub fn load_config(config_path: Option<&String>) -> Result<RunnerConfig, Box<dyn
         }
     };
     // Device name
-    match settings.get_str(DEVICE_NAME_KEY) {
-        Ok(device_name) => runner_config.device_name = device_name,
+    match settings.get_str(DEVICE_ID_KEY) {
+        Ok(device_id) => runner_config.device_id = device_id,
         Err(_) => {}
     };
     // Server address
@@ -143,7 +143,7 @@ mod tests {
     #[test]
     fn load_default_config() {
         let result = load_config(None).unwrap();
-        assert_ne!("", result.device_name);
+        assert_ne!("", result.device_id);
         assert_eq!(DEFAULT_SERVER_ADDRESS, result.server_address);
         assert_eq!(DEFAULT_USER_NAME, result.user_name);
         assert_eq!(DEFAULT_USER_PASSWORD, result.user_password);
@@ -157,7 +157,7 @@ mod tests {
         let result = load_config(
             Some(&String::from("resources/test/good/bare_single.yaml"))
         ).unwrap();
-        assert_ne!("", result.device_name);
+        assert_ne!("", result.device_id);
         assert_eq!(DEFAULT_SERVER_ADDRESS, result.server_address);
         assert_eq!(DEFAULT_USER_NAME, result.user_name);
         assert_eq!(DEFAULT_USER_PASSWORD, result.user_password);
@@ -170,7 +170,7 @@ mod tests {
         let result = load_config(
             Some(&String::from("resources/test/good/bare_continuous.yaml"))
         ).unwrap();
-        assert_ne!("", result.device_name);
+        assert_ne!("", result.device_id);
         assert_eq!(DEFAULT_SERVER_ADDRESS, result.server_address);
         assert_eq!(DEFAULT_USER_NAME, result.user_name);
         assert_eq!(DEFAULT_USER_PASSWORD, result.user_password);
@@ -184,7 +184,7 @@ mod tests {
         let result = load_config(
             Some(&String::from("resources/test/good/full_single.yaml"))
         ).unwrap();
-        assert_eq!("Test Device Name", result.device_name);
+        assert_eq!("Test Device Name", result.device_id);
         assert_eq!("tcp://test.server.address:1883", result.server_address);
         assert_eq!("TestUser", result.user_name);
         assert_eq!("TestPassword", result.user_password);
@@ -198,7 +198,7 @@ mod tests {
         let result = load_config(
             Some(&String::from("resources/test/good/full_continuous.yaml"))
         ).unwrap();
-        assert_eq!("Test Device Name", result.device_name);
+        assert_eq!("Test Device Name", result.device_id);
         assert_eq!("tcp://test.server.address:1883", result.server_address);
         assert_eq!("TestUser", result.user_name);
         assert_eq!("TestPassword", result.user_password);
